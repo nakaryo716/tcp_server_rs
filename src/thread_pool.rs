@@ -1,4 +1,5 @@
 use std::{
+    num::NonZero,
     sync::{
         Arc, Mutex,
         mpsc::{self, Receiver, Sender},
@@ -12,15 +13,13 @@ pub struct ThreadPool {
 }
 
 impl ThreadPool {
-    pub fn new(num: u32) -> Self {
-        if num == 0 {
-            panic!("number of worker thread should more than 0");
-        }
+    pub fn new(num: NonZero<usize>) -> Self {
+        let num = num.get() - 2;
 
         let (sender, receiver) = mpsc::channel::<Task>();
         let arc_receiver = Arc::new(Mutex::new(receiver));
 
-        let mut workers = Vec::with_capacity(num as usize);
+        let mut workers = Vec::with_capacity(num);
 
         for id in 0..num {
             let arc_receiver = Arc::clone(&arc_receiver);
@@ -55,12 +54,12 @@ impl Drop for ThreadPool {
 
 struct Worker {
     #[allow(unused)]
-    id: u32,
+    id: usize,
     handle: JoinHandle<()>,
 }
 
 impl Worker {
-    fn generate(id: u32, receiver: Arc<Mutex<Receiver<Task>>>) -> Self {
+    fn generate(id: usize, receiver: Arc<Mutex<Receiver<Task>>>) -> Self {
         let handle = thread::spawn(move || {
             loop {
                 let task_result;
@@ -95,13 +94,17 @@ impl Task {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::{Arc, Mutex}, time};
+    use std::{
+        num::NonZeroUsize,
+        sync::{Arc, Mutex},
+        time,
+    };
 
     use crate::thread_pool::ThreadPool;
 
     #[test]
     fn test_blocking_task() {
-        let pool = ThreadPool::new(4);
+        let pool = ThreadPool::new(NonZeroUsize::new(4).unwrap());
 
         let data = Arc::new(Mutex::new(0));
         for _ in 0..4 {
@@ -121,4 +124,3 @@ mod tests {
         *gurad += 1;
     }
 }
-
